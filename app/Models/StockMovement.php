@@ -16,8 +16,17 @@ class StockMovement extends Model
         'note',
     ];
 
-    public function product(): BelongsTo
+    protected $casts = [
+        'quantity' => 'decimal:2',
+    ];
+
+    public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function reference()
+    {
+        return $this->morphTo();
     }
 }

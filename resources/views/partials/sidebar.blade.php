@@ -36,6 +36,12 @@
         Sales
     </a>
 
+    <a href="{{ route('stock-movements.index') }}"
+    class="list-group-item list-group-item-action">
+        <i class="bi bi-arrow-left-right"></i>
+        Stock Movements
+    </a>
+
     <a href="#"
         class="list-group-item list-group-item-action">
         <i class="nav-icon bi bi-people"></i>

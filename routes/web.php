@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\SupplierController;
 use App\Http\Controllers\Admin\PurchaseController;
 use App\Http\Controllers\Admin\SaleController;
+use App\Http\Controllers\Admin\StockMovementController;
 
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +28,9 @@ Route::middleware('auth')->group(function () {
     
     Route::delete('suppliers/{id}/force-delete', [SupplierController::class, 'forceDelete'])
     ->name('suppliers.force-delete');
+
+    Route::get('stock-movements', [StockMovementController::class, 'index'])
+    ->name('stock-movements.index');
     
     Route::resource('suppliers', SupplierController::class);
     Route::resource('products', ProductController::class);
