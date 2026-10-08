@@ -33,9 +33,9 @@
 
             <th>Nama</th>
 
-            <th>Kategori</th>
+            <th>Harga Beli</th>
 
-            <th>Harga</th>
+            <th>Harga Jual</th>
 
             <th>Stok</th>
 
@@ -57,7 +57,7 @@
 
                 <td>{{ $product->name }}</td>
 
-                <td>{{ $product->category->name }}</td>
+                <td>Rp {{ number_format($product->purchase_price, 0, ',', '.') }}</td>
 
                 <td>Rp {{ number_format($product->selling_price, 0, ',', '.') }}</td>
 

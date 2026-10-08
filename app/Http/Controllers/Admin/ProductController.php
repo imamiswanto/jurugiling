@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Category;
 use App\Http\Requests\StoreProductRequest;
@@ -36,7 +35,7 @@ class ProductController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StoreProductRequest $request)
     {
         $image = null;
         if ($request->hasFile('image')) {
@@ -58,8 +57,6 @@ class ProductController extends Controller
         'purchase_price' => $request->purchase_price,
 
         'selling_price' => $request->selling_price,
-
-        'stock' => $request->stock,
 
         'minimum_stock' => $request->minimum_stock,
 
@@ -104,7 +101,7 @@ class ProductController extends Controller
                 Storage::disk('public')->delete($product->image);
                 }
                 $image = $request->file('image')->store('products', 'public');
-}
+                }
 
         $product->update([
 
@@ -118,11 +115,7 @@ class ProductController extends Controller
 
         'description' => $request->description,
 
-        'purchase_price' => $request->purchase_price,
-
         'selling_price' => $request->selling_price,
-
-        'stock' => $request->stock,
 
         'minimum_stock' => $request->minimum_stock,
         
@@ -142,13 +135,31 @@ class ProductController extends Controller
      */
     public function destroy(Product $product)
     {
+        if (
+            $product->purchaseItems()->exists() ||
+            $product->saleItems()->exists() ||
+            $product->stockMovements()->exists()
+        ) {
+            $product->update([
+                'is_active' => false,
+            ]);
+
+            return redirect()
+                ->route('products.index')
+                ->with(
+                    'success',
+                    'Produk sudah digunakan dalam transaksi dan dinonaktifkan.'
+                );
+        }
+
         if ($product->image) {
-            Storage::disk('public')
-            ->delete($product->image);
-            }
+            Storage::disk('public')->delete($product->image);
+        }
+
         $product->delete();
+
         return redirect()
-        ->route('products.index')
-        ->with('success', 'Produk berhasil dihapus.');
+            ->route('products.index')
+            ->with('success', 'Produk berhasil dihapus.');
     }
 }

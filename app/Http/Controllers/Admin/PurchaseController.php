@@ -41,6 +41,8 @@ class PurchaseController extends Controller
             ));
     }
 
+
+
     /**
      * Store a newly created resource in storage.
      */
@@ -68,6 +70,7 @@ class PurchaseController extends Controller
                 
                 $product = Product::findOrFail($item['product_id']);
                 $product->increment('stock', $item['qty']);
+                $this->syncProductPurchasePrice($product);
                 $product->stockMovements()->create([
                     'type' => 'purchase',
                     'quantity' => $item['qty'],
@@ -97,6 +100,18 @@ class PurchaseController extends Controller
         $sequence = $lastPurchase ? ((int) substr($lastPurchase->invoice_number, -4)) + 1 : 1;
         
         return 'PO-' . $date . '-' . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+    }
+
+    private function syncProductPurchasePrice(Product $product): void
+    {
+        $latestPurchaseItem = PurchaseItem::where('product_id', $product->id)
+            ->whereHas('purchase')
+            ->latest('id')
+            ->first();
+
+        $product->update([
+            'purchase_price' => $latestPurchaseItem?->price ?? 0,
+        ]);
     }
 
     /**
@@ -162,6 +177,9 @@ class PurchaseController extends Controller
                 ->merge($newItems->keys())
                 ->unique();
 
+            $removedProductIds = $oldItems->keys()
+                ->diff($newItems->keys());
+
             foreach ($allProductIds as $productId) {
 
                 $oldQty = $oldItems->get($productId)?->qty ?? 0;
@@ -192,6 +210,12 @@ class PurchaseController extends Controller
                 ]);
             }
 
+            foreach ($removedProductIds as $productId) {
+                $product = Product::findOrFail($productId);
+
+                $this->syncProductPurchasePrice($product);
+            }
+
             // Update purchase
             $purchase->update([
                 'supplier_id' => $data['supplier_id'],
@@ -215,6 +239,10 @@ class PurchaseController extends Controller
                     'subtotal' => $subtotal,
                 ]);
 
+                $product = Product::findOrFail($item['product_id']);
+                
+                $this->syncProductPurchasePrice($product);
+
                 $total += $subtotal;
             }
 
@@ -233,48 +261,66 @@ class PurchaseController extends Controller
      * Remove the specified resource from storage.
      */
     public function destroy(Purchase $purchase)
-{
-    $purchase->load('items');
+    {
+       //dd($purchase->id, $purchase->invoice_number);
+        $purchase->load('items');
 
-    // Cek semua stok terlebih dahulu
-    foreach ($purchase->items as $item) {
-        $product = Product::findOrFail($item->product_id);
+        // Simpan product yang terdampak sebelum item dihapus
+        $affectedProductIds = $purchase->items
+            ->pluck('product_id')
+            ->unique();
 
-        if ($product->stock < $item->qty) {
-            return back()->with(
-                'error',
-                "Purchase tidak dapat dihapus karena stok {$product->name} tidak mencukupi."
-            );
-        }
-    }
-
-    DB::transaction(function () use ($purchase) {
-
+        // Cek semua stok terlebih dahulu
         foreach ($purchase->items as $item) {
             $product = Product::findOrFail($item->product_id);
 
-            // Kurangi stok
-            $product->decrement('stock', $item->qty);
-
-            // Catat perubahan stok
-            $product->stockMovements()->create([
-                'type' => 'adjustment',
-                'quantity' => -$item->qty,
-                'reference_type' => Purchase::class,
-                'reference_id' => $purchase->id,
-                'note' => 'Penyesuaian stok dari penghapusan purchase ' . $purchase->invoice_number,
-            ]);
+            if ($product->stock < $item->qty) {
+                return back()->with(
+                    'error',
+                    "Purchase tidak dapat dihapus karena stok {$product->name} tidak mencukupi."
+                );
+            }
         }
 
-        // Hapus item purchase
-        $purchase->items()->delete();
+        DB::transaction(function () use (
+            $purchase,
+            $affectedProductIds
+        ) {
 
-        // Hapus purchase
-        $purchase->delete();
-    });
+            foreach ($purchase->items as $item) {
+                $product = Product::findOrFail($item->product_id);
 
-    return redirect()
-        ->route('purchases.index')
-        ->with('success', 'Purchase berhasil dihapus.');
-}
+                // Kurangi stok
+                $product->decrement('stock', $item->qty);
+
+                // Catat perubahan stok
+                $product->stockMovements()->create([
+                    'type' => 'adjustment',
+                    'quantity' => -$item->qty,
+                    'reference_type' => Purchase::class,
+                    'reference_id' => $purchase->id,
+                    'note' => 'Penyesuaian stok dari penghapusan purchase ' . $purchase->invoice_number,
+                ]);
+            }
+
+            // Hapus item purchase
+            $purchase->items()->delete();
+
+            // Soft delete purchase
+            $purchase->delete();
+
+            // Sync ulang harga beli terakhir
+            foreach ($affectedProductIds as $productId) {
+                $product = Product::find($productId);
+
+                if ($product) {
+                    $this->syncProductPurchasePrice($product);
+                }
+            }
+        });
+
+        return redirect()
+            ->route('purchases.index')
+            ->with('success', 'Purchase berhasil dihapus.');
+    }
 }

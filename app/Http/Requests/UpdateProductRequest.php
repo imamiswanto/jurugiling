@@ -37,11 +37,7 @@ class UpdateProductRequest extends FormRequest
 
         'description' => 'nullable',
 
-        'purchase_price' => 'required|numeric|min:0',
-
         'selling_price' => 'required|numeric|min:0',
-
-        'stock' => 'required|integer|min:0',
 
         'minimum_stock' => 'required|integer|min:0',
 

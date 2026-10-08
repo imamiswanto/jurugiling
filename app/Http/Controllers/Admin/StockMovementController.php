@@ -23,7 +23,7 @@ class StockMovementController extends Controller
 
         $movements = $query
             ->latest()
-            ->paginate(20)
+            ->paginate(10)
             ->withQueryString();
 
         $products = Product::orderBy('name')->get();
