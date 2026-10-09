@@ -107,15 +107,26 @@ class SupplierController extends Controller
         return view('admin.suppliers.trash', compact('suppliers'));
         }
 
-    public function forceDelete($id) {
+    public function forceDelete($id)
+    {
         $supplier = Supplier::onlyTrashed()->findOrFail($id);
-        $supplier->forceDelete();
-        
-        return redirect()
-        ->route('suppliers.trash')
-        ->with('success', 'Supplier berhasil dihapus permanen.');
+
+        if ($supplier->purchases()->exists()) {
+            return redirect()
+                ->route('suppliers.trash')
+                ->with(
+                    'error',
+                    'Supplier tidak dapat dihapus permanen karena masih memiliki riwayat transaksi purchase.'
+                );
         }
-        
+
+        $supplier->forceDelete();
+
+        return redirect()
+            ->route('suppliers.trash')
+            ->with('success', 'Supplier berhasil dihapus permanen.');
+    }
+  
         public function restore($id){
             $supplier = Supplier::onlyTrashed()->findOrFail($id);
             $supplier->restore();
