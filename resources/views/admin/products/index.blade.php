@@ -39,6 +39,8 @@
 
             <th>Stok</th>
 
+            <th>Status</th>
+
             <th>Aksi</th>
 
         </tr>
@@ -62,6 +64,14 @@
                 <td>Rp {{ number_format($product->selling_price, 0, ',', '.') }}</td>
 
                 <td>{{ $product->stock }}</td>
+                
+                <td>
+                    @if ($product->is_active)
+                        <span class="badge bg-success">Active</span>
+                    @else
+                        <span class="badge bg-danger">Inactive</span>
+                    @endif
+                </td>
 
                 <td>
                     <a href="{{ route('products.edit', $product) }}" class="btn btn-warning btn-sm">

@@ -20,6 +20,7 @@ class ProductController extends Controller
          $products = Product::with('category')
         ->latest()
         ->paginate(10);
+
         return view('admin.products.index', compact('products'));
     }
 
