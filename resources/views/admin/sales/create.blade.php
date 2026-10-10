@@ -75,7 +75,8 @@
                         <option value="">-- Pilih Product --</option>
 
                         @foreach($products as $product)
-                            <option value="{{ $product->id }}">
+                            <option value="{{ $product->id }}"
+                                    data-price="{{ $product->selling_price }}">
                                 {{ $product->name }}
                                 (Stock: {{ $product->stock }})
                             </option>
@@ -99,11 +100,12 @@
                     <label class="form-label">Harga</label>
 
                     <input type="number"
-                           name="items[0][price]"
-                           class="form-control"
-                           min="0"
-                           step="0.01"
-                           required>
+                        name="items[0][price]"
+                        class="form-control price-input"
+                        min="0"
+                        step="0.01"
+                        readonly
+                        required>
                 </div>
 
                 <div class="col-md-2 d-flex align-items-end">
@@ -140,6 +142,20 @@
     <script>
     let itemIndex = 1;
 
+    document.getElementById('items-container').addEventListener('change', function (event) {
+    if (!event.target.matches('select[name$="[product_id]"]')) {
+        return;
+        }
+
+        const row = event.target.closest('.item-row');
+        const selectedOption = event.target.selectedOptions[0];
+        const priceInput = row.querySelector('.price-input');
+
+        priceInput.value = selectedOption
+            ? selectedOption.dataset.price || ''
+            : '';
+    });
+    
     document.getElementById('add-item').addEventListener('click', function () {
         const container = document.getElementById('items-container');
         const firstRow = container.querySelector('.item-row');

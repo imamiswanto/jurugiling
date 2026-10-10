@@ -94,7 +94,7 @@
                                         <option
                                             value="{{ $product->id }}"
                                             {{ old("items.$index.product_id", $item->product_id) == $product->id ? 'selected' : '' }}
-                                        >
+                                        data-price="{{ $product->selling_price }}">
                                             {{ $product->name }} (Stock: {{ $product->stock }})
                                         </option>
                                     @endforeach
@@ -118,15 +118,14 @@
                             <div class="col-md-3">
                                 <label class="form-label">Harga</label>
 
-                                <input
-                                    type="number"
-                                    name="items[{{ $index }}][price]"
-                                    class="form-control"
-                                    step="0.01"
+                                <input type="number"
+                                    name="items[0][price]"
+                                    class="form-control price-input"
                                     min="0"
-                                    value="{{ old("items.$index.price", $item->price) }}"
-                                    required
-                                >
+                                    step="0.01"
+                                    readonly
+                                    value="{{ $item->product->selling_price }}"
+                                    required>
                             </div>
 
                             <div class="col-md-2 d-flex align-items-end">
@@ -169,6 +168,20 @@
     <script>
         let itemIndex = {{ $sale->items->count() }};
 
+        document.getElementById('items-container').addEventListener('change', function (event) {
+        if (!event.target.matches('select[name$="[product_id]"]')) {
+            return;
+            }
+
+            const row = event.target.closest('.item-row');
+            const selectedOption = event.target.selectedOptions[0];
+            const priceInput = row.querySelector('.price-input');
+
+            priceInput.value = selectedOption
+                ? selectedOption.dataset.price || ''
+                : '';
+        });
+        
         document.getElementById('add-item').addEventListener('click', function () {
             const container = document.getElementById('items-container');
             const firstRow = container.querySelector('.item-row');

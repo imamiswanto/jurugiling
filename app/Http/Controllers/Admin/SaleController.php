@@ -8,6 +8,7 @@ use App\Models\Sale;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 
 class SaleController extends Controller
 {
@@ -37,9 +38,12 @@ class SaleController extends Controller
             'sale_date' => ['required', 'date'],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'exists:products,id'],
+            'items.*.product_id' => [
+                'required',
+                Rule::exists('products', 'id')
+                    ->where('is_active', true),
+            ],
             'items.*.qty' => ['required', 'numeric', 'gt:0'],
-            'items.*.price' => ['required', 'numeric', 'gte:0'],
         ]);
 
         DB::transaction(function () use ($data) {
@@ -55,7 +59,9 @@ class SaleController extends Controller
 
             foreach ($data['items'] as $item) {
 
-                $product = Product::findOrFail($item['product_id']);
+                $product = Product::whereKey($item['product_id'])
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
                 if ($product->stock < $item['qty']) {
                     throw ValidationException::withMessages([
@@ -63,12 +69,12 @@ class SaleController extends Controller
                     ]);
                 }
 
-                $subtotal = $item['qty'] * $item['price'];
+                $subtotal = $item['qty'] * $product->selling_price;
 
                 $sale->items()->create([
                     'product_id' => $item['product_id'],
                     'qty' => $item['qty'],
-                    'price' => $item['price'],
+                    'price' => $product->selling_price,
                     'subtotal' => $subtotal,
                 ]);
 
@@ -126,43 +132,66 @@ class SaleController extends Controller
             'customer_name' => ['nullable', 'string', 'max:255'],
 
             'items' => ['required', 'array', 'min:1'],
-            'items.*.product_id' => ['required', 'exists:products,id'],
+            'items.*.product_id' => [
+                'required',
+                Rule::exists('products', 'id')
+                    ->where('is_active', true),
+            ],
             'items.*.qty' => ['required', 'numeric', 'gt:0'],
-            'items.*.price' => ['required', 'numeric', 'gte:0'],
         ]);
 
         DB::transaction(function () use ($data, $sale) {
 
             $sale->load('items');
 
-            $oldItems = $sale->items->keyBy('product_id');
+            
+            $oldItems = $sale->items
+                ->groupBy('product_id')
+                ->map(function ($items) {
+                    return [
+                        'qty' => $items->sum('qty'),
+                    ];
+                });
+
 
             $newItems = collect($data['items'])
                 ->groupBy('product_id')
                 ->map(function ($items) {
                     return [
                         'qty' => $items->sum('qty'),
-                        'price' => $items->last()['price'],
                     ];
                 });
 
+            
             $productIds = $oldItems->keys()
                 ->merge($newItems->keys())
-                ->unique();
+                ->unique()
+                ->sort()
+                ->values();
+
+            $products = Product::whereIn('id', $productIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
 
             $total = 0;
 
             foreach ($productIds as $productId) {
+                $product = $products->get($productId);
 
-                $oldQty = $oldItems->get($productId)->qty ?? 0;
+                if (!$product) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Salah satu produk tidak ditemukan.',
+                    ]);
+                }
+
+                $oldQty = $oldItems->get($productId)['qty'] ?? 0;
                 $newQty = $newItems->get($productId)['qty'] ?? 0;
 
                 $delta = $newQty - $oldQty;
 
                 if ($delta > 0) {
-
-                    $product = Product::findOrFail($productId);
-
                     if ($product->stock < $delta) {
                         throw ValidationException::withMessages([
                             'items' => "Stok {$product->name} tidak mencukupi. Stok tersedia: {$product->stock}, tambahan kebutuhan: {$delta}.",
@@ -170,24 +199,15 @@ class SaleController extends Controller
                     }
 
                     $product->decrement('stock', $delta);
-
                 } elseif ($delta < 0) {
-
-                    $product = Product::findOrFail($productId);
-
                     $product->increment('stock', abs($delta));
                 }
 
                 if ($newQty > 0) {
-                    $price = $newItems->get($productId)['price'];
-
-                    $total += $newQty * $price;
+                    $total += $newQty * $product->selling_price;
                 }
 
                 if ($delta != 0) {
-
-                    $product = Product::findOrFail($productId);
-
                     $product->stockMovements()->create([
                         'type' => 'adjustment',
                         'quantity' => -$delta,
@@ -198,16 +218,17 @@ class SaleController extends Controller
                 }
             }
 
+
             $sale->items()->delete();
 
             foreach ($newItems as $productId => $item) {
 
-                $subtotal = $item['qty'] * $item['price'];
+                $subtotal = $item['qty'] * $products->get($productId)->selling_price;
 
                 $sale->items()->create([
                     'product_id' => $productId,
                     'qty' => $item['qty'],
-                    'price' => $item['price'],
+                    'price' => $products->get($productId)->selling_price,
                     'subtotal' => $subtotal,
                 ]);
             }
@@ -246,9 +267,6 @@ class SaleController extends Controller
                     'note' => 'Pembatalan penjualan ' . $sale->invoice_number,
                 ]);
             }
-
-            // Hapus item sale
-            $sale->items()->delete();
 
             // Soft delete sale
             $sale->delete();
