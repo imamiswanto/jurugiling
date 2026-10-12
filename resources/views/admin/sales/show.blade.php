@@ -54,15 +54,21 @@
                 </thead>
 
                 <tbody>
-                    @foreach($sale->items as $index => $item)
+                    @forelse($sale->items as $index => $item)
                         <tr>
                             <td>{{ $index + 1 }}</td>
-                            <td>{{ $item->product->name }}</td>
+                            <td>{{ $item->product?->name ?? 'Produk tidak ditemukan' }}</td>
                             <td>{{ $item->qty }}</td>
                             <td>Rp {{ number_format($item->price, 0, ',', '.') }}</td>
                             <td>Rp {{ number_format($item->subtotal, 0, ',', '.') }}</td>
                         </tr>
-                    @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="5" class="text-center">
+                                Tidak ada item penjualan.
+                            </td>
+                        </tr>
+                    @endforelse
                 </tbody>
 
                 <tfoot>

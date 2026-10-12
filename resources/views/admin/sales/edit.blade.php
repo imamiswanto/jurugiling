@@ -119,12 +119,12 @@
                                 <label class="form-label">Harga</label>
 
                                 <input type="number"
-                                    name="items[0][price]"
+                                    name="items[{{ $index }}][price]"
                                     class="form-control price-input"
                                     min="0"
                                     step="0.01"
                                     readonly
-                                    value="{{ $item->product->selling_price }}"
+                                    value="{{ $item->product?->selling_price ?? '' }}"
                                     required>
                             </div>
 
@@ -217,6 +217,10 @@
             if (rows.length === 1) return;
 
             event.target.closest('.item-row').remove();
+        });
+
+        document.querySelectorAll('#items-container select[name$="[product_id]"]').forEach(function (select) {
+            select.dispatchEvent(new Event('change', { bubbles: true }));
         });
     </script>
 

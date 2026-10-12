@@ -17,7 +17,7 @@ class SaleController extends Controller
         $sales = Sale::with('items.product')
             ->latest('sale_date')
             ->latest()
-            ->get();
+            ->paginate(10);
 
         return view('admin.sales.index', compact('sales'));
     }
@@ -112,7 +112,10 @@ class SaleController extends Controller
     {
         $sale->load('items.product');
 
+        $existingProductIds = $sale->items->pluck('product_id');
+
         $products = Product::where('is_active', true)
+            ->orWhereIn('id', $existingProductIds)
             ->orderBy('name')
             ->get();
 
@@ -134,8 +137,7 @@ class SaleController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => [
                 'required',
-                Rule::exists('products', 'id')
-                    ->where('is_active', true),
+                Rule::exists('products', 'id'),
             ],
             'items.*.qty' => ['required', 'numeric', 'gt:0'],
         ]);
@@ -185,9 +187,23 @@ class SaleController extends Controller
                         'items' => 'Salah satu produk tidak ditemukan.',
                     ]);
                 }
-
                 $oldQty = $oldItems->get($productId)['qty'] ?? 0;
                 $newQty = $newItems->get($productId)['qty'] ?? 0;
+
+                if (!$product->is_active) {
+                    if (!$oldItems->has($productId)) {
+                        throw ValidationException::withMessages([
+                            'items' => "Produk {$product->name} sudah tidak aktif.",
+                        ]);
+                    }
+
+                    if ($newQty > $oldQty) {
+                        throw ValidationException::withMessages([
+                            'items' => "Qty produk {$product->name} yang tidak aktif tidak boleh ditambah.",
+                        ]);
+                    }
+                }
+
 
                 $delta = $newQty - $oldQty;
 

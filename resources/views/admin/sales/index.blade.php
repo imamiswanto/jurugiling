@@ -89,7 +89,9 @@
                     @endforelse
                 </tbody>
             </table>
-
+            <div class="mt-3">
+                {{ $sales->links('pagination::bootstrap-5') }}
+            </div>
         </div>
     </div>
 
