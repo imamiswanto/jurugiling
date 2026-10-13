@@ -11,6 +11,14 @@ class StockMovementController extends Controller
 {
     public function index(Request $request)
     {
+        $request->validate([
+            'product_id' => ['nullable', 'integer', 'exists:products,id'],
+            'type' => [
+                'nullable',
+                'in:purchase,sale,adjustment',
+            ],
+        ]);
+
         $query = StockMovement::with('product');
 
         if ($request->filled('product_id')) {

@@ -146,7 +146,7 @@ class SaleController extends Controller
 
             $sale->load('items');
 
-            
+
             $oldItems = $sale->items
                 ->groupBy('product_id')
                 ->map(function ($items) {
@@ -164,7 +164,7 @@ class SaleController extends Controller
                     ];
                 });
 
-            
+
             $productIds = $oldItems->keys()
                 ->merge($newItems->keys())
                 ->unique()
@@ -262,29 +262,54 @@ class SaleController extends Controller
             ->with('success', 'Sale berhasil diperbarui.');
     }
 
-    public function destroy(Sale $sale)
+
+public function destroy(Sale $sale)
     {
         DB::transaction(function () use ($sale) {
+            // Kunci sale agar pembatalan tidak diproses bersamaan.
+            $sale = Sale::whereKey($sale->id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             $sale->load('items');
 
-            foreach ($sale->items as $item) {
-                $product = Product::findOrFail($item->product_id);
+            $productIds = $sale->items
+                ->pluck('product_id')
+                ->unique()
+                ->sort()
+                ->values();
 
-                // Kembalikan stock karena sale dibatalkan
+            // Kunci semua produk dalam urutan ID yang konsisten.
+            $products = Product::whereIn('id', $productIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            if ($products->count() !== $productIds->count()) {
+                throw ValidationException::withMessages([
+                    'items' => 'Salah satu produk tidak ditemukan.',
+                ]);
+            }
+
+            foreach ($sale->items as $item) {
+                $product = $products->get($item->product_id);
+
+                // Kembalikan stok karena penjualan dibatalkan.
                 $product->increment('stock', $item->qty);
 
-                // Catat perubahan stock
+                // Catat pembatalan tanpa menghapus riwayat sebelumnya.
                 $product->stockMovements()->create([
                     'type' => 'adjustment',
                     'quantity' => $item->qty,
                     'reference_type' => Sale::class,
                     'reference_id' => $sale->id,
-                    'note' => 'Pembatalan penjualan ' . $sale->invoice_number,
+                    'note' => 'Pembatalan penjualan '
+                        . $sale->invoice_number,
                 ]);
             }
 
-            // Soft delete sale
+            // Soft delete; detail sale tetap dipertahankan.
             $sale->delete();
         });
 
